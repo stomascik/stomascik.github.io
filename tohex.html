@@ -55,55 +55,60 @@
   <label for="output">Intel HEX output:</label>
   <textarea id="output" readonly></textarea>
 
-  <script>
-    function hexToInt(hexStr) {
-      return parseInt(hexStr, 16);
+<script>
+  function hexToInt(hexStr) {
+    return parseInt(hexStr, 16);
+  }
+
+  function toHex(value, width = 2) {
+    return value.toString(16).toUpperCase().padStart(width, '0');
+  }
+
+  function computeChecksum(byteArray) {
+    const sum = byteArray.reduce((acc, val) => acc + val, 0);
+    const checksum = (0x100 - (sum & 0xFF)) & 0xFF;
+    return toHex(checksum);
+  }
+
+  // [MODIFIED] Clean input hex word: remove 0x prefix and invalid chars
+  function splitToBytes(hexWord) {
+    let clean = hexWord.trim().toLowerCase();
+    if (clean.startsWith('0x')) clean = clean.slice(2); // [ADDED]
+    clean = clean.replace(/[^0-9a-f]/gi, ''); // [ADDED]
+
+    if (clean.length === 0) {
+      throw new Error(`Empty or invalid hex data: "${hexWord}"`);
     }
 
-    function toHex(value, width = 2) {
-      return value.toString(16).toUpperCase().padStart(width, '0');
-    }
-
-    function computeChecksum(byteArray) {
-      const sum = byteArray.reduce((acc, val) => acc + val, 0);
-      const checksum = (0x100 - (sum & 0xFF)) & 0xFF;
-      return toHex(checksum);
-    }
-
-    // Split hex word string into array of bytes (2 hex chars each)
-    function splitToBytes(hexWord) {
-      const clean = hexWord.replace(/[^0-9A-Fa-f]/g, '');
-      const bytes = [];
-      for (let i = 0; i < clean.length; i += 2) {
-        bytes.push(clean.substring(i, i + 2).padEnd(2, '0').toUpperCase());
+    const bytes = [];
+    for (let i = 0; i < clean.length; i += 2) {
+      const byte = clean.substring(i, i + 2);
+      if (byte.length < 2) {
+        throw new Error(`Invalid byte length in word: "${hexWord}"`);
       }
-      return bytes;
+      bytes.push(byte.toUpperCase());
     }
+    return bytes;
+  }
 
-    // Flip endianness of 16-bit (2 bytes) or 32-bit (4 bytes) words
-    function flipEndianessBytes(byteArray) {
-      const length = byteArray.length;
-      if (length === 2) {
-        // swap bytes for 16-bit word
-        return [byteArray[1], byteArray[0]];
-      } else if (length === 4) {
-        // swap bytes for 32-bit word
-        return [byteArray[3], byteArray[2], byteArray[1], byteArray[0]];
-      }
-      // For 1 byte or other lengths, no change
-      return byteArray;
-    }
+  function flipEndianessBytes(byteArray) {
+    const length = byteArray.length;
+    if (length === 2) return [byteArray[1], byteArray[0]];
+    if (length === 4) return [byteArray[3], byteArray[2], byteArray[1], byteArray[0]];
+    return byteArray;
+  }
 
-    function processHex() {
-      const input = document.getElementById('input').value;
-      const flipEndian = document.getElementById('flipEndian').checked;
-      const lines = input.split('\n');
-      let output = '';
-      let lastUpper16 = null;
-      let lastUsedAddress = null;
-      let lastByteCount = 0;
-      let addressSet = false;
+  function processHex() {
+    const input = document.getElementById('input').value;
+    const flipEndian = document.getElementById('flipEndian').checked;
+    const lines = input.split('\n');
+    let output = '';
+    let lastUpper16 = null;
+    let lastUsedAddress = null;
+    let lastByteCount = 0;
+    let addressSet = false;
 
+    try {
       for (let line of lines) {
         if (line.trim() === '') continue;
 
@@ -115,10 +120,14 @@
             alert("Error: Continuation line '+' without previous address set.");
             return;
           }
-          parts.shift(); // remove '+'
-          currentAddress = lastUsedAddress + lastByteCount; // increment by previous byte count
+          parts.shift();
+          currentAddress = lastUsedAddress + lastByteCount;
         } else {
-          const addressStr = parts[0];
+          const addressStr = parts[0].replace(/^0x/i, ''); // [ADDED]
+          if (!/^[0-9a-fA-F]+$/.test(addressStr)) {
+            alert(`Invalid hexadecimal address: "${parts[0]}"`);
+            return;
+          }
           currentAddress = hexToInt(addressStr);
           parts.shift();
           addressSet = true;
@@ -128,9 +137,9 @@
         let byteArray = [];
 
         for (const word of dataWords) {
+          if (word.trim() === '') continue;
           let bytes = splitToBytes(word);
 
-          // If flipEndian is checked and data word length > 1 byte, flip it
           if (flipEndian && bytes.length > 1) {
             bytes = flipEndianessBytes(bytes);
           }
@@ -140,14 +149,12 @@
 
         if (byteArray.length === 0) continue;
 
-        // Extended Linear Address record if upper 16 bits changed
         let upper16 = (currentAddress >>> 16) & 0xFFFF;
         let lower16 = currentAddress & 0xFFFF;
         if (upper16 !== lastUpper16) {
           const elaBytes = [0x02, 0x00, 0x00, 0x04, (upper16 >> 8) & 0xFF, upper16 & 0xFF];
           const elaChecksum = computeChecksum(elaBytes);
-          const elaLine = `:02000004${toHex(upper16, 4)}${elaChecksum}`;
-          output += elaLine + '\n';
+          output += `:02000004${toHex(upper16, 4)}${elaChecksum}\n`;
           lastUpper16 = upper16;
         }
 
@@ -172,10 +179,12 @@
       }
 
       output += ':00000001FF';
-
       document.getElementById('output').value = output.trim();
+    } catch (e) {
+      alert("Error: " + e.message);
     }
-  </script>
+  }
+</script>
 
 </body>
 </html>
