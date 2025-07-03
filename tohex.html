@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+  <meta charset="UTF-8">
+  <title>HEX na Intel HEX konvertor</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 30px;
+    }
+    input, textarea, button {
+      display: block;
+      margin-top: 10px;
+      width: 600px;
+      padding: 10px;
+      font-size: 16px;
+    }
+    textarea {
+      height: 250px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>HEX na Intel HEX konvertor</h2>
+
+  <label for="vstup">Vstupné hexadecimálne dáta:</label>
+  <textarea id="vstup" placeholder="00000000  DEADBEEF&#10;00010000  1234 89ABCDEF"></textarea>
+
+  <button onclick="spracujText()">Spracuj</button>
+
+  <label for="vystup">Výstup (Intel HEX):</label>
+  <textarea id="vystup" readonly></textarea>
+
+  <script>
+    function hexToInt(hexStr) {
+      return parseInt(hexStr, 16);
+    }
+
+    function computeChecksum(bytes) {
+      const sum = bytes.reduce((acc, val) => acc + val, 0);
+      const checksum = (0x100 - (sum & 0xFF)) & 0xFF;
+      return checksum.toString(16).toUpperCase().padStart(2, '0');
+    }
+
+    function toHex(n, width = 2) {
+      return n.toString(16).toUpperCase().padStart(width, '0');
+    }
+
+    function splitIntoBytes(hexString) {
+      const clean = hexString.replace(/[^0-9A-Fa-f]/g, '');
+      let bytes = [];
+      for (let i = 0; i < clean.length; i += 2) {
+        bytes.push(clean.substring(i, i + 2).padEnd(2, '0').toUpperCase());
+      }
+      return bytes;
+    }
+
+    function spracujText() {
+      const vstup = document.getElementById('vstup').value;
+      const riadky = vstup.split('\n');
+      let vystup = '';
+      let lastUpper16 = null;
+
+      for (let riadok of riadky) {
+        if (riadok.trim() === '') continue;
+
+        const parts = riadok.trim().split(/\s+/);
+        const adresaStr = parts[0];
+        const fullAddress = hexToInt(adresaStr);
+        const upper16 = (fullAddress >>> 16) & 0xFFFF;
+        const lower16 = fullAddress & 0xFFFF;
+
+        // Spracuj dáta na 8-bitové bajty
+        let rawData = parts.slice(1);
+        let dataBytes = [];
+        rawData.forEach(word => {
+          dataBytes.push(...splitIntoBytes(word));
+        });
+
+        if (dataBytes.length === 0) continue;
+
+        // Pridaj Extended Linear Address Record, ak sa zmenili horné bity
+        if (upper16 !== lastUpper16) {
+          const elaBytes = [0x02, 0x00, 0x00, 0x04, (upper16 >> 8) & 0xFF, upper16 & 0xFF];
+          const elaChecksum = computeChecksum(elaBytes);
+          const elaLine = `:02000004${toHex(upper16, 4)}${elaChecksum}`;
+          vystup += elaLine + '\n';
+          lastUpper16 = upper16;
+        }
+
+        const byteCount = dataBytes.length;
+        const address = toHex(lower16, 4);
+        const recordType = '00';
+
+        const checksumBytes = [
+          byteCount,
+          parseInt(address.slice(0, 2), 16),
+          parseInt(address.slice(2, 4), 16),
+          0x00,
+          ...dataBytes.map(b => parseInt(b, 16))
+        ];
+
+        const checksum = computeChecksum(checksumBytes);
+        const hexLine = `:${toHex(byteCount)}${address}${recordType}${dataBytes.join('')}${checksum}`;
+        vystup += hexLine + '\n';
+      }
+
+      // Pridaj EOF záznam
+      vystup += ':00000001FF';
+
+      document.getElementById('vystup').value = vystup.trim();
+    }
+  </script>
+
+</body>
+</html>
