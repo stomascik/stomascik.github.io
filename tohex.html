@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>HEX to Intel HEX Converter</title>
+  <meta charset="UTF-8" />
+  <title>HEX to Intel HEX Converter with + address continuation</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -22,10 +22,10 @@
 </head>
 <body>
 
-  <h2>HEX to Intel HEX Converter</h2>
+  <h2>HEX to Intel HEX Converter (with '+' address continuation)</h2>
 
   <label for="input">Input hexadecimal data:</label>
-  <textarea id="input" placeholder="00000000  DEADBEEF&#10;00010000  1234 89ABCDEF"></textarea>
+  <textarea id="input" placeholder="00000000  DEADBEEF&#10;+ 1234 89ABCDEF"></textarea>
 
   <button onclick="processHex()">Convert</button>
 
@@ -61,17 +61,31 @@
       const lines = input.split('\n');
       let output = '';
       let lastUpper16 = null;
+      let lastUsedAddress = null;
+      let lastByteCount = 0;
+      let addressSet = false;
 
       for (let line of lines) {
         if (line.trim() === '') continue;
 
-        const parts = line.trim().split(/\s+/);
-        const addressStr = parts[0];
-        const fullAddress = hexToInt(addressStr);
-        const upper16 = (fullAddress >>> 16) & 0xFFFF;
-        const lower16 = fullAddress & 0xFFFF;
+        let parts = line.trim().split(/\s+/);
+        let currentAddress;
 
-        const dataWords = parts.slice(1);
+        if (parts[0] === '+') {
+          if (!addressSet) {
+            alert("Error: Continuation line '+' without previous address set.");
+            return;
+          }
+          parts.shift(); // remove '+'
+          currentAddress = lastUsedAddress + lastByteCount; // increment by previous byte count
+        } else {
+          const addressStr = parts[0];
+          currentAddress = hexToInt(addressStr);
+          parts.shift();
+          addressSet = true;
+        }
+
+        let dataWords = parts;
         let byteArray = [];
         dataWords.forEach(word => {
           byteArray.push(...splitToBytes(word));
@@ -79,7 +93,9 @@
 
         if (byteArray.length === 0) continue;
 
-        // Insert Extended Linear Address Record if upper address changed
+        // Extended Linear Address record if upper 16 bits changed
+        let upper16 = (currentAddress >>> 16) & 0xFFFF;
+        let lower16 = currentAddress & 0xFFFF;
         if (upper16 !== lastUpper16) {
           const elaBytes = [0x02, 0x00, 0x00, 0x04, (upper16 >> 8) & 0xFF, upper16 & 0xFF];
           const elaChecksum = computeChecksum(elaBytes);
@@ -103,9 +119,11 @@
         const checksum = computeChecksum(checksumBytes);
         const hexLine = `:${toHex(byteCount)}${address}${recordType}${byteArray.join('')}${checksum}`;
         output += hexLine + '\n';
+
+        lastUsedAddress = currentAddress;
+        lastByteCount = byteCount;
       }
 
-      // Add end-of-file record
       output += ':00000001FF';
 
       document.getElementById('output').value = output.trim();
