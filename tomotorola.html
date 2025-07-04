@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>HEX to Motorola S-record Converter</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 30px;
+    }
+    input, textarea, button, label {
+      display: block;
+      margin-top: 10px;
+      font-size: 16px;
+    }
+    textarea {
+      width: 600px;
+      height: 250px;
+      padding: 10px;
+      font-family: monospace;
+    }
+    input[type="checkbox"] {
+      display: inline-block;
+      width: auto;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+    label.checkbox-label {
+      display: inline-block;
+      margin-top: 20px;
+      user-select: none;
+      cursor: pointer;
+    }
+    button {
+      width: 150px;
+      padding: 10px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>HEX to Motorola S-record Converter</h2>
+
+  <textarea id="input" placeholder="00000000  DEADBEEF
++ 1234 89ABCDEF"></textarea>
+
+  <label class="checkbox-label">
+    <input type="checkbox" id="flipEndian" />
+    Flip endianness for data with more than 8 bits
+  </label>
+
+  <button onclick="processSrec()">Convert</button>
+
+  <label for="output">Motorola S-record output:</label>
+  <textarea id="output" readonly></textarea>
+
+  <script>
+    function toHex(val, width = 2) {
+      return val.toString(16).toUpperCase().padStart(width, '0');
+    }
+
+    function checksumSrec(bytes) {
+      let sum = bytes.reduce((a, b) => a + b, 0) & 0xFF;
+      return toHex((~sum) & 0xFF);
+    }
+
+    function splitToBytes(hexWord) {
+      let clean = hexWord.trim().toLowerCase();
+      if (clean.startsWith('0x')) clean = clean.slice(2);
+      clean = clean.replace(/[^0-9a-f]/gi, '');
+      if (clean.length === 0) throw new Error(`Invalid hex: ${hexWord}`);
+      if (clean.length % 2 !== 0) throw new Error(`Odd hex length: ${hexWord}`);
+      const bytes = [];
+      for (let i = 0; i < clean.length; i += 2) {
+        bytes.push(clean.substring(i, i + 2).toUpperCase());
+      }
+      return bytes;
+    }
+
+    function flipEndian(bytes) {
+      const len = bytes.length;
+      if (len === 2) return [bytes[1], bytes[0]];
+      if (len === 4) return [bytes[3], bytes[2], bytes[1], bytes[0]];
+      return bytes;
+    }
+
+    function processSrec() {
+      const input = document.getElementById('input').value;
+      const flip = document.getElementById('flipEndian').checked;
+      const lines = input.split('\n');
+
+      let output = '';
+      let lastAddress = 0;
+      let lastByteCount = 0;
+      let addressSet = false;
+
+      output += 'S0030000FC\n'; // header
+
+      try {
+        for (let line of lines) {
+          if (line.trim() === '') continue;
+
+          let parts = line.trim().split(/\s+/);
+          let address;
+
+          if (parts[0] === '+') {
+            if (!addressSet) throw new Error("No previous address for '+'");
+            parts.shift();
+            address = lastAddress + lastByteCount;
+          } else {
+            let addrStr = parts.shift().replace(/^0x/i, '').replace(/[^0-9a-f]/gi, '');
+            if (addrStr.length === 0) throw new Error("Invalid address");
+            address = parseInt(addrStr, 16);
+            addressSet = true;
+          }
+
+          let byteArray = [];
+          for (let word of parts) {
+            let bytes = splitToBytes(word);
+            if (flip && bytes.length > 1) bytes = flipEndian(bytes);
+            byteArray.push(...bytes);
+          }
+
+          if (byteArray.length === 0) continue;
+
+          let addrBytes, recordType;
+          if (address <= 0xFFFF) {
+            recordType = '1';
+            addrBytes = [ (address >> 8) & 0xFF, address & 0xFF ];
+          } else if (address <= 0xFFFFFF) {
+            recordType = '2';
+            addrBytes = [ (address >> 16) & 0xFF, (address >> 8) & 0xFF, address & 0xFF ];
+          } else {
+            recordType = '3';
+            addrBytes = [ (address >> 24) & 0xFF, (address >> 16) & 0xFF, (address >> 8) & 0xFF, address & 0xFF ];
+          }
+
+          const dataBytes = byteArray.map(b => parseInt(b, 16));
+          const recordData = [...addrBytes, ...dataBytes];
+          const byteCount = recordData.length + 1;
+          const record = 'S' + recordType + toHex(byteCount) + recordData.map(b => toHex(b)).join('') + checksumSrec([byteCount, ...recordData]);
+
+          output += record + '\n';
+          lastAddress = address;
+          lastByteCount = dataBytes.length;
+        }
+
+        // footer based on highest address type used
+        const endType = (lastAddress <= 0xFFFF) ? '9' : (lastAddress <= 0xFFFFFF ? '8' : '7');
+        const endAddr = (endType === '9') ? [ (lastAddress >> 8) & 0xFF, lastAddress & 0xFF ]
+                       : (endType === '8') ? [ (lastAddress >> 16) & 0xFF, (lastAddress >> 8) & 0xFF, lastAddress & 0xFF ]
+                       : [ (lastAddress >> 24) & 0xFF, (lastAddress >> 16) & 0xFF, (lastAddress >> 8) & 0xFF, lastAddress & 0xFF ];
+
+        const endCount = endAddr.length + 1;
+        const endRec = 'S' + endType + toHex(endCount) + endAddr.map(toHex).join('') + checksumSrec([endCount, ...endAddr]);
+        output += endRec;
+
+        document.getElementById('output').value = output.trim();
+      } catch (e) {
+        alert("Error: " + e.message);
+      }
+    }
+  </script>
+
+</body>
+</html>
