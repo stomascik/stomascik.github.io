@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Binary to Formatted Hex</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    input, textarea, button, label { display: block; margin-top: 10px; font-size: 16px; }
+    textarea { width: 600px; height: 300px; padding: 10px; font-family: monospace; }
+    button { width: 150px; padding: 10px; cursor: pointer; margin-right: 10px; }
+    input[type="checkbox"] { display: inline-block; width: auto; margin-right: 10px; vertical-align: middle; }
+    label.checkbox-label { display: inline-block; user-select: none; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h2>Binary File to Hex Viewer</h2>
+
+  <label for="fileInput">Select binary file:</label>
+  <input type="file" id="fileInput" accept=".bin">
+
+  <label for="byteGroup">Bytes per line:</label>
+  <input type="number" id="byteGroup" value="32" min="1">
+
+  <label class="checkbox-label">
+    <input type="checkbox" id="spaceBetween" />
+    Space between numbers
+  </label>
+
+  <button onclick="convertBinaryToHex()">Convert</button>
+
+  <label for="output">Hex Output:</label>
+  <textarea id="output" readonly></textarea>
+
+  <button onclick="copyToClipboard()">Copy to Clipboard</button>
+  <button onclick="saveToFile()">Save to File</button>
+
+  <script>
+    function convertBinaryToHex() {
+      const fileInput = document.getElementById('fileInput');
+      const output = document.getElementById('output');
+      const groupSize = parseInt(document.getElementById('byteGroup').value, 10);
+      const spaceBetween = document.getElementById('spaceBetween').checked;
+
+      if (!fileInput.files[0]) {
+        alert("Please select a binary file.");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const buffer = new Uint8Array(e.target.result);
+        let result = '';
+
+        for (let i = 0; i < buffer.length; i++) {
+          result += buffer[i].toString(16).toUpperCase().padStart(2, '0');
+          if ((i + 1) % groupSize === 0) {
+            result += '\n';
+          } else if (spaceBetween) {
+            result += ' ';
+          }
+        }
+
+        output.value = result.trim();
+      };
+
+      reader.readAsArrayBuffer(fileInput.files[0]);
+    }
+
+    function copyToClipboard() {
+      const output = document.getElementById('output');
+      output.select();
+      output.setSelectionRange(0, 99999); // For mobile devices
+      navigator.clipboard.writeText(output.value)
+        .then(() => alert("Copied to clipboard"))
+        .catch(err => alert("Failed to copy: " + err));
+    }
+
+    function saveToFile() {
+      const output = document.getElementById('output').value;
+      const blob = new Blob([output], { type: 'text/plain' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'output.txt';
+      link.click();
+    }
+  </script>
+</body>
+</html>
