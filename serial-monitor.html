@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Serial Monitor Node.js Script</title>
+</head>
+<body>
+  <h1>Serial Monitor Node.js Script</h1>
+
+  <h2>Description</h2>
+  <p>
+    This Node.js script monitors a serial port on Windows, automatically detects when a specified COM port is connected or disconnected, 
+    reads incoming data, and logs it both to the console and optionally to a file. 
+    Each line of data is timestamped with the current time <strong>[HH:MM:SS]</strong>, and the port opening event includes a full timestamp <strong>[YYYY-MM-DD HH:MM:SS]</strong>.
+  </p>
+
+  <h3>Features</h3>
+  <ul>
+    <li>Automatic detection of a specified COM port.</li>
+    <li>Continuous reading of data from the serial port.</li>
+    <li>Timestamps for all lines of data.</li>
+    <li>Optional logging to a file.</li>
+    <li>Automatic handling of port disconnection and errors.</li>
+    <li>Customizable COM port and baud rate via command line arguments.</li>
+  </ul>
+
+  <h2>Installation on Windows</h2>
+  <ol>
+    <li>Download and install <a href="https://nodejs.org/en/download/" target="_blank">Node.js</a> (recommended version 18 or higher).</li>
+    <li>Open a command prompt (Windows + R → type <code>cmd</code> → Enter).</li>
+    <li>Verify Node.js installation by running:
+      <pre>node -v
+npm -v</pre>
+    </li>
+    <li>Create a folder for your project, e.g., <code>D:\serial-monitor</code>.</li>
+    <li>Navigate to the folder in the command prompt:
+      <pre>cd D:\serial-monitor</pre>
+    </li>
+    <li>Initialize a Node.js project:
+      <pre>npm init -y</pre>
+    </li>
+    <li>Install the required packages:
+      <pre>npm install serialport</pre>
+    </li>
+    <li>Create a file <code>serial-monitor.js</code> and paste the Node.js script code into it.</li>
+    <li>Run the script using:
+      <pre>node serial-monitor.js [COM_PORT] [BAUD_RATE] [LOG_FILE]</pre>
+      <p>
+        Example:
+        <pre>node serial-monitor.js COM18 115200 D:\logs\serial.log</pre>
+      </p>
+    </li>
+  </ol>
+
+  <h2>Command Line Parameters</h2>
+  <ul>
+    <li><code>COM_PORT</code> – the serial port to monitor (default: COM18).</li>
+    <li><code>BAUD_RATE</code> – communication speed (default: 115200).</li>
+    <li><code>LOG_FILE</code> – optional file path to save the output log.</li>
+  </ul>
+
+  <h2>Notes</h2>
+  <ul>
+    <li>The script automatically checks every 2 seconds if the port is connected or disconnected.</li>
+    <li>Incoming serial data is split by line and timestamped.</li>
+  </ul>
+</body>
+</html>
