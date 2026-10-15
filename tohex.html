@@ -55,6 +55,9 @@
   <label for="output">Intel HEX output:</label>
   <textarea id="output" readonly></textarea>
 
+  <button onclick="copyToClipboard()">Copy to Clipboard</button>
+  <button onclick="saveToFile()">Save to File</button>
+
 <script>
   function hexToInt(hexStr) {
     return parseInt(hexStr, 16);
@@ -183,6 +186,24 @@
     } catch (e) {
       alert("Error: " + e.message);
     }
+  }
+
+  function copyToClipboard() {
+    const output = document.getElementById('output');
+    output.select();
+    output.setSelectionRange(0, 99999);
+    navigator.clipboard.writeText(output.value)
+      .then(() => alert("Copied to clipboard"))
+      .catch(err => alert("Failed to copy: " + err));
+  }
+
+  function saveToFile() {
+    const output = document.getElementById('output').value;
+    const blob = new Blob([output], { type: 'text/plain' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'output.txt';
+    link.click();
   }
 </script>
 
